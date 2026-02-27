@@ -1,10 +1,10 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tauri::State;
 use crate::proxy_engine::linux_tproxy::LinuxTproxyAdapter;
 use crate::proxy_engine::upstream_relay::UpstreamProtocol;
 use crate::proxy_engine::ProxyAdapter;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tauri::State;
+use tokio::sync::Mutex;
 
 pub struct ProxyState {
     pub engine: Arc<Mutex<Option<LinuxTproxyAdapter>>>,
@@ -29,7 +29,11 @@ pub struct ProxyConfig {
 }
 
 #[tauri::command]
-pub async fn start_proxy(config: ProxyConfig, state: State<'_, ProxyState>) -> Result<String, String> {
+pub async fn start_proxy(
+    config: ProxyConfig,
+    state: State<'_, ProxyState>,
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
     let mut lock = state.engine.lock().await;
     if lock.is_some() {
         return Err("Proxy is already running".into());
@@ -41,31 +45,31 @@ pub async fn start_proxy(config: ProxyConfig, state: State<'_, ProxyState>) -> R
             let host = config.upstream_host.as_deref().unwrap_or("127.0.0.1");
             let port = config.upstream_port.unwrap_or(1080);
             let addr_str = format!("{}:{}", host, port);
-            
+
             let addr: SocketAddr = match addr_str.parse() {
                 Ok(a) => a,
                 Err(_) => return Err(format!("Invalid upstream address: {}", addr_str)),
             };
 
             if config.upstream_type == "socks5" {
-                UpstreamProtocol::Socks5 { 
-                    server: addr, 
-                    username: config.username.clone(), 
-                    password: config.password.clone() 
+                UpstreamProtocol::Socks5 {
+                    server: addr,
+                    username: config.username.clone(),
+                    password: config.password.clone(),
                 }
             } else {
-                UpstreamProtocol::HttpProxy { 
-                    server: addr, 
-                    username: config.username.clone(), 
-                    password: config.password.clone() 
+                UpstreamProtocol::HttpProxy {
+                    server: addr,
+                    username: config.username.clone(),
+                    password: config.password.clone(),
                 }
             }
         }
         _ => return Err(format!("Unknown upstream type: {}", config.upstream_type)),
     };
 
-    let mut engine = LinuxTproxyAdapter::new(config.local_port, upstream);
-    if let Err(e) = engine.start().await {
+    let mut engine = LinuxTproxyAdapter::new(config.local_port, upstream, app_handle.clone());
+    if let Err(e) = engine.start(app_handle).await {
         return Err(format!("Failed to start proxy engine: {}", e));
     }
 

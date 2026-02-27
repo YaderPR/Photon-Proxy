@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::proxy_engine::ProxyAdapter;
+use anyhow::Result;
 
 pub struct TunAdapter {
     interface_name: String,
@@ -14,8 +14,8 @@ impl TunAdapter {
 }
 
 impl ProxyAdapter for TunAdapter {
-    async fn start(&mut self) -> Result<()> {
-        log::warn!("TunAdapter::start is a placeholder and not implemented.");
+    async fn start(&mut self, _app_handle: tauri::AppHandle) -> Result<()> {
+        log::info!("Starting TunAdapter placeholder");
         Ok(())
     }
 

@@ -6,6 +6,7 @@
   import ProxyCore from "$lib/components/ProxyCore.svelte";
   import UpstreamConfig from "$lib/components/UpstreamConfig.svelte";
   import EngineStatus from "$lib/components/EngineStatus.svelte";
+  import LogViewer from "$lib/components/LogViewer.svelte";
 
   // State management using Svelte 5 runes
   let isRunning = $state(false);
@@ -147,6 +148,11 @@
     <div class="grid w-full grid-cols-1 gap-8 md:grid-cols-2">
       <UpstreamConfig bind:config {isRunning} />
       <EngineStatus {config} {isRunning} />
+    </div>
+
+    <!-- Logs Section -->
+    <div class="w-full mt-12">
+      <LogViewer />
     </div>
   </main>
 
