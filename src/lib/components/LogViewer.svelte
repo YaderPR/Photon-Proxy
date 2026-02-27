@@ -1,7 +1,6 @@
 <script>
     import { onMount } from "svelte";
     import { listen } from "@tauri-apps/api/event";
-    import { Terminal, Shield, Globe, Activity, Trash2 } from "lucide-svelte";
 
     /** @type {any[]} */
     let logs = $state([]);
@@ -17,9 +16,8 @@
 
     onMount(() => {
         const unlisten = listen("proxy-log", (event) => {
-            logs = [...logs, event.payload].slice(-200); // Keep last 200 logs
+            logs = [...logs, event.payload].slice(-200);
         });
-
         return () => {
             unlisten.then((u) => u());
         };
@@ -29,6 +27,7 @@
         logs = [];
     }
 
+    /** @param {string} proto */
     function getProtocolColor(proto) {
         switch (proto?.toUpperCase()) {
             case "TCP":
@@ -36,43 +35,54 @@
             case "UDP":
                 return "text-purple-400";
             case "DNS":
-                return "text-yellow-400";
+                return "text-amber-400";
             default:
-                return "text-slate-400";
+                return "text-slate-500";
         }
     }
 
+    /** @param {string} level */
     function getLevelColor(level) {
         switch (level?.toUpperCase()) {
             case "ERROR":
-                return "text-red-400";
+                return "text-red-400 bg-red-500/10";
             case "WARN":
-                return "text-orange-400";
+                return "text-amber-400 bg-amber-500/10";
             default:
-                return "text-slate-400";
+                return "text-slate-500 bg-slate-800/50";
         }
     }
 </script>
 
-<div
-    class="bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden flex flex-col h-[400px] shadow-2xl"
->
+<div class="glass rounded-2xl overflow-hidden flex flex-col h-full">
     <!-- Header -->
     <div
-        class="px-4 py-3 border-b border-white/5 bg-white/5 flex items-center justify-between"
+        class="px-5 py-3 border-b border-slate-700/30 flex items-center justify-between"
     >
-        <div class="flex items-center gap-2">
-            <div class="p-1.5 bg-cyan-500/20 rounded-lg">
-                <Terminal class="w-4 h-4 text-cyan-400" />
+        <div class="flex items-center gap-2.5">
+            <div class="p-1.5 bg-indigo-500/10 rounded-lg">
+                <svg
+                    class="w-4 h-4 text-indigo-400"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <polyline points="4 17 10 11 4 5"></polyline>
+                    <line x1="12" y1="19" x2="20" y2="19"></line>
+                </svg>
             </div>
             <h3
-                class="text-sm font-semibold text-white tracking-wide uppercase"
+                class="text-[0.8rem] font-semibold text-slate-300 tracking-wide"
             >
                 System Activity
             </h3>
+            <span class="text-[0.6rem] text-slate-600 font-mono"
+                >{logs.length} events</span
+            >
         </div>
 
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
             <label class="flex items-center gap-2 cursor-pointer group">
                 <input
                     type="checkbox"
@@ -80,28 +90,39 @@
                     class="hidden"
                 />
                 <div
-                    class="w-8 h-4 bg-slate-800 rounded-full relative transition-colors {autoScroll
-                        ? 'bg-cyan-500/50'
+                    class="w-7 h-3.5 bg-slate-800 rounded-full relative transition-colors {autoScroll
+                        ? 'bg-indigo-500/40'
                         : ''}"
                 >
                     <div
-                        class="absolute top-1 left-1 w-2 h-2 bg-white rounded-full transition-transform {autoScroll
-                            ? 'translate-x-4'
+                        class="absolute top-0.5 left-0.5 w-2.5 h-2.5 bg-slate-400 rounded-full transition-all {autoScroll
+                            ? 'translate-x-3 bg-indigo-400'
                             : ''}"
                     ></div>
                 </div>
                 <span
-                    class="text-xs text-slate-400 group-hover:text-white transition-colors"
-                    >Auto-scroll</span
+                    class="text-[0.6rem] text-slate-500 group-hover:text-slate-300 transition-colors"
+                    >Auto</span
                 >
             </label>
 
             <button
                 onclick={clearLogs}
-                class="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-red-400"
+                class="p-1.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-600 hover:text-red-400"
                 title="Clear Logs"
             >
-                <Trash2 class="w-4 h-4" />
+                <svg
+                    class="w-3.5 h-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path
+                        d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"
+                    ></path>
+                </svg>
             </button>
         </div>
     </div>
@@ -109,41 +130,52 @@
     <!-- Log Area -->
     <div
         bind:this={logContainer}
-        class="flex-1 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed scrollbar-thin scrollbar-thumb-white/10"
+        class="flex-1 overflow-y-auto p-3 font-mono text-[11px] leading-relaxed log-scroll"
     >
         {#if logs.length === 0}
             <div
-                class="h-full flex flex-col items-center justify-center text-slate-500 gap-3"
+                class="h-full flex flex-col items-center justify-center text-slate-600 gap-3"
             >
-                <Activity class="w-8 h-8 opacity-20" />
-                <p>Awaiting network activity...</p>
+                <svg
+                    class="w-8 h-8 opacity-30"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                >
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
+                    ></polyline>
+                </svg>
+                <p class="text-[0.7rem]">Awaiting network activity...</p>
             </div>
         {:else}
-            <div class="space-y-1">
+            <div class="space-y-px">
                 {#each logs as log}
                     <div
-                        class="group flex gap-3 py-0.5 hover:bg-white/5 rounded px-2 transition-colors border-l-2 border-transparent hover:border-cyan-500/50"
+                        class="group flex gap-3 py-1 px-2 rounded-md hover:bg-slate-800/40 transition-colors"
                     >
-                        <span class="text-slate-600 shrink-0"
+                        <span class="text-slate-700 shrink-0 tabular-nums"
                             >{log.timestamp}</span
                         >
                         <span
-                            class="font-bold w-8 shrink-0 {getProtocolColor(
+                            class="font-bold w-7 shrink-0 {getProtocolColor(
                                 log.protocol,
                             )}">{log.protocol}</span
                         >
-                        <span class="flex-1 text-slate-300">
+                        <span class="flex-1 text-slate-400">
                             {log.message}
                             {#if log.src || log.dst}
-                                <span class="text-slate-500 ml-2">
+                                <span class="text-slate-600 ml-1.5">
                                     {log.src}
-                                    <span class="text-cyan-500/50">→</span>
+                                    <span class="text-indigo-500/50 mx-0.5"
+                                        >→</span
+                                    >
                                     {log.dst}
                                 </span>
                             {/if}
                         </span>
                         <span
-                            class="text-[10px] uppercase font-bold px-1.5 rounded bg-white/5 {getLevelColor(
+                            class="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded {getLevelColor(
                                 log.level,
                             )} self-center"
                         >
@@ -154,32 +186,17 @@
             </div>
         {/if}
     </div>
-
-    <!-- Footer Stats -->
-    <div
-        class="px-4 py-2 bg-black/20 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-500"
-    >
-        <div class="flex gap-4">
-            <span class="flex items-center gap-1">
-                <Shield class="w-3 h-3 text-green-500/50" /> Encrypted Tunnel
-            </span>
-            <span class="flex items-center gap-1">
-                <Globe class="w-3 h-3 text-blue-500/50" /> Global Traffic
-            </span>
-        </div>
-        <span>{logs.length} events captured</span>
-    </div>
 </div>
 
 <style>
-    .scrollbar-thin::-webkit-scrollbar {
+    .log-scroll::-webkit-scrollbar {
         width: 4px;
     }
-    .scrollbar-thin::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
+    .log-scroll::-webkit-scrollbar-thumb {
+        background: rgba(100, 116, 139, 0.2);
         border-radius: 2px;
     }
-    .scrollbar-thin::-webkit-scrollbar-track {
+    .log-scroll::-webkit-scrollbar-track {
         background: transparent;
     }
 </style>

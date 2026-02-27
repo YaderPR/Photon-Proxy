@@ -2,10 +2,10 @@
     let { config = {}, isRunning = false } = $props();
 </script>
 
-<section class="glass rounded-[20px] p-7 flex flex-col gap-6 h-full">
+<section class="glass rounded-2xl p-6 flex flex-col gap-5">
     <div class="flex items-center gap-3">
         <div
-            class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-photon-purple"
+            class="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10 text-purple-400"
         >
             <svg
                 class="h-[18px] w-[18px]"
@@ -20,70 +20,79 @@
                 <line x1="6" y1="18" x2="6.01" y2="18"></line>
             </svg>
         </div>
-        <h3 class="text-[0.95rem] font-bold tracking-tight text-white m-0">
-            Engine Matrix
+        <h3 class="text-sm font-bold tracking-tight text-slate-200">
+            Engine Status
         </h3>
     </div>
 
-    <div class="flex flex-col gap-2.5">
+    <!-- Port Display -->
+    <div class="flex flex-col gap-2">
         <label
             for="local-port"
-            class="text-[0.7rem] font-semibold uppercase tracking-wider text-white/40"
-            >Intercept Port</label
+            class="text-[0.65rem] font-semibold uppercase tracking-wider text-slate-500"
         >
+            Intercept Port
+        </label>
         <div class="relative flex items-center">
             <input
                 id="local-port"
                 type="number"
                 bind:value={config.local_port}
                 disabled={isRunning}
-                class="w-full rounded-xl border border-white/10 bg-black/40 p-3.5 font-mono text-sm text-white transition-all focus:border-photon-cyan focus:bg-white/5 focus:outline-none focus:ring-1 focus:ring-photon-cyan/30 disabled:opacity-50"
+                class="w-full rounded-xl border border-slate-700/50 bg-slate-900/60 p-3 font-mono text-sm text-slate-200 transition-all
+                  focus:border-indigo-500/50 focus:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500/20
+                  disabled:opacity-40 disabled:cursor-not-allowed"
             />
             <span
-                class="absolute right-4 text-[0.65rem] font-extrabold tracking-widest text-white/20"
+                class="absolute right-3 text-[0.6rem] font-bold tracking-widest text-slate-600"
                 >TPROXY</span
             >
         </div>
     </div>
 
-    <div class="mt-2 flex flex-col gap-3">
-        {#each ["Zero-Copy Splice Bridge", "DNS-over-TCP Secure Tunnel", "Transparent UDP Session Layer"] as feature}
+    <!-- Feature Indicators -->
+    <div class="flex flex-col gap-2.5 mt-1">
+        {#each [{ name: "Zero-Copy Splice Bridge", color: "cyan" }, { name: "DNS-over-TCP Tunnel", color: "purple" }, { name: "UDP Session Layer", color: "indigo" }] as feature}
             <div
-                class="flex items-center gap-3 text-[0.75rem] transition-all duration-300 {isRunning
-                    ? 'text-photon-cyan'
-                    : 'text-white/40'}"
+                class="flex items-center gap-3 text-[0.72rem] transition-all duration-300
+              {isRunning ? 'text-slate-300' : 'text-slate-600'}"
             >
                 <span
-                    class="h-1.5 w-1.5 rounded-full transition-all duration-300 {isRunning
-                        ? 'bg-photon-cyan shadow-[0_0_10px_rgba(0,242,255,1)]'
-                        : 'bg-white/10'}"
-                ></span>
-                <span>{feature}</span>
+                    class="h-1.5 w-1.5 rounded-full transition-all duration-500
+                  {isRunning
+                        ? feature.color === 'cyan'
+                            ? 'bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.5)]'
+                            : feature.color === 'purple'
+                              ? 'bg-purple-400 shadow-[0_0_6px_rgba(168,85,247,0.5)]'
+                              : 'bg-indigo-400 shadow-[0_0_6px_rgba(129,140,248,0.5)]'
+                        : 'bg-slate-700'}"
+                >
+                </span>
+                <span>{feature.name}</span>
             </div>
         {/each}
     </div>
 
+    <!-- Running stats -->
     {#if isRunning}
         <div
-            class="mt-auto border-t border-white/10 pt-6 flex justify-between animate-in fade-in duration-500"
+            class="mt-auto border-t border-slate-700/30 pt-4 flex justify-between text-center"
         >
-            <div class="flex flex-col gap-1">
-                <span
-                    class="text-[0.8rem] font-extrabold tracking-widest text-white uppercase"
-                    >Fast</span
+            <div class="flex flex-col gap-0.5">
+                <span class="text-[0.75rem] font-bold text-slate-200"
+                    >Zero-Copy</span
                 >
                 <span
-                    class="text-[0.6rem] font-semibold text-white/40 uppercase"
+                    class="text-[0.55rem] font-semibold text-slate-600 uppercase tracking-wider"
                     >Pipeline</span
                 >
             </div>
-            <div class="flex flex-col gap-1 text-right">
-                <span
-                    class="text-[0.8rem] font-extrabold tracking-widest text-white uppercase"
-                    >AES-GCM</span
+            <div class="flex flex-col gap-0.5">
+                <span class="text-[0.75rem] font-bold text-slate-200"
+                    >AES-256</span
                 >
                 <span
-                    class="text-[0.6rem] font-semibold text-white/40 uppercase"
+                    class="text-[0.55rem] font-semibold text-slate-600 uppercase tracking-wider"
                     >Cipher</span
                 >
             </div>
