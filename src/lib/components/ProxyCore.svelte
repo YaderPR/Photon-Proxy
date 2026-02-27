@@ -62,7 +62,7 @@
             <span
                 class="font-mono text-[0.6rem] tracking-[0.1em] text-indigo-400/70 animate-pulse"
             >
-                QUANTUM TUNNEL ACTIVE
+                PHOTON TUNNEL ACTIVE
             </span>
         {/if}
     </div>
