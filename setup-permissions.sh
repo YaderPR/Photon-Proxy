@@ -4,12 +4,13 @@ BINARY_PATH="./src-tauri/target/debug/photon-proxy"
 # Check if binary is running to avoid "Text file busy"
 if pgrep -x "temp-svelte" > /dev/null || pgrep -x "photon-proxy" > /dev/null; then
     echo "⚠️  Alert: The application is currently running."
-    echo "� Please close Photon Proxy (temp-svelte/photon-proxy) and any running 'sudo' processes before continuing."
+    echo " Please close Photon Proxy (temp-svelte/photon-proxy) and any running 'sudo' processes before continuing."
     exit 1
 fi
 
-echo "�🚀 Building Photon Proxy (Debug)..."
-bun run tauri build --debug
+echo "🚀 Building Photon Proxy (Rust Binary)..."
+# Using cargo build directly is MUCH faster because it skips the slow bundling (DEB/RPM)
+cd src-tauri && cargo build && cd ..
 
 if [ -f "$BINARY_PATH" ]; then
     echo "🔓 Granting network capabilities to $BINARY_PATH..."
