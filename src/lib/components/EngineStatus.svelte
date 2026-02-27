@@ -2,10 +2,13 @@
     let { config = {}, isRunning = false } = $props();
 </script>
 
-<section class="card glass">
-    <div class="card-header">
-        <div class="icon-tag">
+<section class="glass rounded-[20px] p-7 flex flex-col gap-6 h-full">
+    <div class="flex items-center gap-3">
+        <div
+            class="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-photon-purple"
+        >
             <svg
+                class="h-[18px] w-[18px]"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -17,188 +20,73 @@
                 <line x1="6" y1="18" x2="6.01" y2="18"></line>
             </svg>
         </div>
-        <h3>Engine Matrix</h3>
+        <h3 class="text-[0.95rem] font-bold tracking-tight text-white m-0">
+            Engine Matrix
+        </h3>
     </div>
 
-    <div class="field">
-        <label for="local-port">Intercept Port</label>
-        <div class="input-wrapper">
+    <div class="flex flex-col gap-2.5">
+        <label
+            for="local-port"
+            class="text-[0.7rem] font-semibold uppercase tracking-wider text-white/40"
+            >Intercept Port</label
+        >
+        <div class="relative flex items-center">
             <input
                 id="local-port"
                 type="number"
                 bind:value={config.local_port}
                 disabled={isRunning}
+                class="w-full rounded-xl border border-white/10 bg-black/40 p-3.5 font-mono text-sm text-white transition-all focus:border-photon-cyan focus:bg-white/5 focus:outline-none focus:ring-1 focus:ring-photon-cyan/30 disabled:opacity-50"
             />
-            <span class="unit">TPROXY</span>
+            <span
+                class="absolute right-4 text-[0.65rem] font-extrabold tracking-widest text-white/20"
+                >TPROXY</span
+            >
         </div>
     </div>
 
-    <div class="matrix-info">
-        <div class="info-item" class:active={isRunning}>
-            <span class="dot"></span>
-            <span class="text">Zero-Copy Splice Bridge</span>
-        </div>
-        <div class="info-item" class:active={isRunning}>
-            <span class="dot"></span>
-            <span class="text">DNS-over-TCP Secure Tunnel</span>
-        </div>
-        <div class="info-item" class:active={isRunning}>
-            <span class="dot"></span>
-            <span class="text">Transparent UDP Session Layer</span>
-        </div>
+    <div class="mt-2 flex flex-col gap-3">
+        {#each ["Zero-Copy Splice Bridge", "DNS-over-TCP Secure Tunnel", "Transparent UDP Session Layer"] as feature}
+            <div
+                class="flex items-center gap-3 text-[0.75rem] transition-all duration-300 {isRunning
+                    ? 'text-photon-cyan'
+                    : 'text-white/40'}"
+            >
+                <span
+                    class="h-1.5 w-1.5 rounded-full transition-all duration-300 {isRunning
+                        ? 'bg-photon-cyan shadow-[0_0_10px_rgba(0,242,255,1)]'
+                        : 'bg-white/10'}"
+                ></span>
+                <span>{feature}</span>
+            </div>
+        {/each}
     </div>
 
     {#if isRunning}
-        <div class="live-stats">
-            <div class="stat">
-                <span class="val">FAST</span>
-                <span class="lab">PIPELINE</span>
+        <div
+            class="mt-auto border-t border-white/10 pt-6 flex justify-between animate-in fade-in duration-500"
+        >
+            <div class="flex flex-col gap-1">
+                <span
+                    class="text-[0.8rem] font-extrabold tracking-widest text-white uppercase"
+                    >Fast</span
+                >
+                <span
+                    class="text-[0.6rem] font-semibold text-white/40 uppercase"
+                    >Pipeline</span
+                >
             </div>
-            <div class="stat">
-                <span class="val">AES-GCM</span>
-                <span class="lab">CIPHER</span>
+            <div class="flex flex-col gap-1 text-right">
+                <span
+                    class="text-[0.8rem] font-extrabold tracking-widest text-white uppercase"
+                    >AES-GCM</span
+                >
+                <span
+                    class="text-[0.6rem] font-semibold text-white/40 uppercase"
+                    >Cipher</span
+                >
             </div>
         </div>
     {/if}
 </section>
-
-<style>
-    .card {
-        padding: 1.75rem;
-        border-radius: 20px;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
-    }
-
-    .card-header {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .icon-tag {
-        width: 32px;
-        height: 32px;
-        background: rgba(255, 255, 255, 0.05);
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--purple);
-    }
-
-    .icon-tag svg {
-        width: 18px;
-    }
-
-    h3 {
-        margin: 0;
-        font-size: 0.95rem;
-        font-weight: 700;
-        letter-spacing: 0.05rem;
-        color: var(--text);
-    }
-
-    .field {
-        display: flex;
-        flex-direction: column;
-        gap: 0.6rem;
-    }
-
-    label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: var(--text-dim);
-        text-transform: uppercase;
-        letter-spacing: 0.05rem;
-    }
-
-    .input-wrapper {
-        position: relative;
-        display: flex;
-        align-items: center;
-    }
-
-    input {
-        width: 100%;
-        background: #0c0c12;
-        border: 1px solid var(--border);
-        color: var(--text);
-        padding: 0.85rem 1rem;
-        border-radius: 12px;
-        font-family: var(--font-mono);
-        font-size: 0.95rem;
-    }
-
-    .unit {
-        position: absolute;
-        right: 1rem;
-        font-size: 0.65rem;
-        font-weight: 800;
-        color: var(--text-vdim);
-        letter-spacing: 0.05rem;
-    }
-
-    .matrix-info {
-        margin-top: 0.5rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.8rem;
-    }
-
-    .info-item {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        font-size: 0.75rem;
-        color: var(--text-dim);
-        transition: all 0.3s;
-    }
-
-    .dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--text-vdim);
-        transition: all 0.3s;
-    }
-
-    .info-item.active {
-        color: var(--cyan);
-    }
-
-    .info-item.active .dot {
-        background: var(--cyan);
-        box-shadow: 0 0 10px var(--cyan);
-    }
-
-    .live-stats {
-        margin-top: auto;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-    }
-
-    .stat {
-        display: flex;
-        flex-direction: column;
-        gap: 0.2rem;
-    }
-
-    .val {
-        font-weight: 800;
-        font-size: 0.8rem;
-        letter-spacing: 0.1rem;
-        color: var(--text);
-    }
-
-    .lab {
-        font-size: 0.6rem;
-        font-weight: 600;
-        color: var(--text-vdim);
-        text-transform: uppercase;
-    }
-</style>

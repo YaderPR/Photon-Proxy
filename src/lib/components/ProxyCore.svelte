@@ -2,19 +2,40 @@
     let { isRunning = false, isLoading = false, onToggle } = $props();
 </script>
 
-<div class="core-wrapper">
+<div class="flex flex-col items-center gap-8 p-8">
     <button
-        class="core-button"
-        class:active={isRunning}
+        class="group relative flex h-40 w-40 items-center justify-center rounded-full bg-[#08080c] transition-all duration-500 ease-out outline-none disabled:cursor-not-allowed"
+        class:active-core={isRunning}
         onclick={onToggle}
         disabled={isLoading}
         aria-label={isRunning ? "Disconnect Proxy" : "Initialize Proxy"}
     >
-        <div class="glow-layer"></div>
-        <div class="ring-outer"></div>
-        <div class="ring-inner"></div>
+        <!-- Background Glow -->
+        <div
+            class="absolute -inset-5 rounded-full blur-2xl transition-all duration-500 {isRunning
+                ? 'bg-photon-cyan/25 scale-125'
+                : 'bg-photon-purple/10'}"
+        ></div>
 
-        <div class="icon-container">
+        <!-- Rings -->
+        <div
+            class="absolute inset-0 rounded-full border-4 border-white/5 transition-all duration-500 group-hover:border-white/10 group-hover:shadow-[0_0_30px_rgba(255,255,255,0.05)] {isRunning
+                ? 'border-photon-cyan shadow-[0_0_40px_rgba(0,242,255,0.2),inset_0_0_20px_rgba(0,242,255,0.2)] animate-pulse-glow'
+                : ''}"
+        ></div>
+
+        <div
+            class="absolute inset-4 rounded-full border-2 border-white/5 opacity-50 transition-all duration-500 {isRunning
+                ? 'border-photon-cyan opacity-80 scale-90'
+                : ''}"
+        ></div>
+
+        <!-- Icon -->
+        <div
+            class="z-10 h-12 w-12 transition-all duration-500 {isRunning
+                ? 'text-photon-cyan drop-shadow-[0_0_10px_rgba(0,242,255,0.8)] opacity-100'
+                : 'text-white/40'}"
+        >
             <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -27,174 +48,45 @@
         </div>
     </button>
 
-    <div class="label-container">
-        <span class="main-label"
-            >{isLoading
-                ? "SYNCING..."
-                : isRunning
-                  ? "DISCONNECT"
-                  : "INITIALIZE"}</span
+    <div class="flex flex-col items-center gap-2 text-center">
+        <span
+            class="text-[0.9rem] font-black uppercase tracking-[0.25em] transition-colors duration-500 {isRunning
+                ? 'text-white'
+                : 'text-white/40'}"
         >
+            {isLoading ? "SYNCING..." : isRunning ? "DISCONNECT" : "INITIALIZE"}
+        </span>
         {#if isRunning}
-            <span class="particle-status">PHOTON FLOW ACTIVE</span>
+            <span
+                class="font-mono text-[0.6rem] tracking-[0.1em] text-photon-cyan opacity-80 animate-pulse"
+            >
+                PHOTON FLOW ACTIVE
+            </span>
         {/if}
     </div>
 </div>
 
 <style>
-    .core-wrapper {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.5rem;
-        padding: 2rem;
-    }
-
-    .core-button {
-        width: 160px;
-        height: 160px;
-        border-radius: 50%;
-        background: #08080c;
-        border: none;
-        cursor: pointer;
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-        outline: none;
-    }
-
-    .glow-layer {
-        position: absolute;
-        inset: -20px;
-        background: radial-gradient(circle, var(--purple) 0%, transparent 70%);
-        opacity: 0.1;
-        transition: all 0.5s;
-        pointer-events: none;
-    }
-
-    .ring-outer {
-        position: absolute;
-        inset: 0;
-        border: 4px solid var(--border);
-        border-radius: 50%;
-        transition: all 0.5s;
-    }
-
-    .ring-inner {
-        position: absolute;
-        inset: 12px;
-        border: 2px solid var(--border);
-        border-radius: 50%;
-        opacity: 0.5;
-        transition: all 0.5s;
-    }
-
-    .icon-container {
-        width: 50px;
-        height: 50px;
-        color: var(--text-dim);
-        opacity: 0.6;
-        transition: all 0.5s;
-        z-index: 2;
-    }
-
-    /* Interaction States */
-    .core-button:hover:not(:disabled) {
-        transform: scale(1.05);
-    }
-
-    .core-button:hover:not(:disabled) .ring-outer {
-        border-color: rgba(255, 255, 255, 0.2);
-        box-shadow: 0 0 30px rgba(255, 255, 255, 0.05);
-    }
-
-    /* Active State (Engine Running) */
-    .core-button.active {
-        background: #000;
-    }
-
-    .core-button.active .glow-layer {
-        background: radial-gradient(circle, var(--cyan) 0%, transparent 70%);
-        opacity: 0.25;
-        inset: -30px;
-    }
-
-    .core-button.active .ring-outer {
-        border-color: var(--cyan);
-        box-shadow:
-            0 0 40px var(--cyan-glow),
-            inset 0 0 20px var(--cyan-glow);
-        animation: pulse-glow 2s infinite ease-in-out;
-    }
-
-    .core-button.active .ring-inner {
-        border-color: var(--cyan);
-        opacity: 0.8;
-        transform: scale(0.9);
-    }
-
-    .core-button.active .icon-container {
-        color: var(--cyan);
-        filter: drop-shadow(0 0 10px var(--cyan));
-    }
-
-    /* Labels */
-    .label-container {
-        text-align: center;
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
-    }
-
-    .main-label {
-        font-size: 0.9rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.25rem;
-        color: var(--text-dim);
-        transition: color 0.5s;
-    }
-
-    .active + .label-container .main-label {
-        color: var(--text);
-    }
-
-    .particle-status {
-        font-family: var(--font-mono);
-        font-size: 0.6rem;
-        color: var(--cyan);
-        letter-spacing: 0.1rem;
-        opacity: 0.8;
-        animation: flicker 2s infinite;
-    }
-
-    @keyframes flicker {
-        0%,
-        100% {
-            opacity: 0.6;
-        }
-        50% {
-            opacity: 1;
-        }
+    @reference "../../app.css";
+    .active-core {
+        @apply bg-black;
     }
 
     @keyframes pulse-glow {
-        0% {
+        0%,
+        100% {
             box-shadow:
-                0 0 20px var(--cyan-glow),
-                inset 0 0 10px var(--cyan-glow);
+                0 0 20px rgba(0, 242, 255, 0.2),
+                inset 0 0 10px rgba(0, 242, 255, 0.2);
         }
         50% {
             box-shadow:
-                0 0 40px var(--cyan-glow),
-                inset 0 0 20px var(--cyan-glow);
+                0 0 40px rgba(0, 242, 255, 0.4),
+                inset 0 0 20px rgba(0, 242, 255, 0.4);
         }
-        100% {
-            box-shadow:
-                0 0 20px var(--cyan-glow),
-                inset 0 0 10px var(--cyan-glow);
-        }
+    }
+
+    .animate-pulse-glow {
+        animation: pulse-glow 2s infinite ease-in-out;
     }
 </style>

@@ -7,9 +7,6 @@
   import UpstreamConfig from "$lib/components/UpstreamConfig.svelte";
   import EngineStatus from "$lib/components/EngineStatus.svelte";
 
-  // Global Theme
-  import "$lib/styles/theme.css";
-
   // State management using Svelte 5 runes
   let isRunning = $state(false);
   let isLoading = $state(false);
@@ -66,30 +63,64 @@
   });
 </script>
 
-<div class="app-layout">
-  <div class="background-effects">
-    <div class="gradient-sphere"></div>
-    <div class="grid-overlay"></div>
+<div
+  class="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-photon-bg text-white selection:bg-photon-cyan/30"
+>
+  <!-- Background Effects -->
+  <div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+    <div
+      class="absolute top-[-20%] left-1/2 h-[1000px] w-[1000px] -translate-x-1/2 rounded-full bg-photon-purple/20 blur-[120px]"
+    ></div>
+    <div
+      class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:linear-gradient(to_bottom,black,transparent)]"
+    ></div>
   </div>
 
-  <nav class="top-nav animate-fade">
-    <div class="brand">
-      <span class="p">P</span>HOTON <span class="accent">PROXY</span>
+  <!-- Navigation -->
+  <nav class="flex w-full items-center justify-between px-8 py-10 lg:px-12">
+    <div class="text-xl font-extrabold tracking-[0.3em]">
+      <span class="text-photon-purple">P</span>HOTON
+      <span class="text-photon-cyan drop-shadow-[0_0_15px_rgba(0,242,255,0.4)]"
+        >PROXY</span
+      >
     </div>
-    <div class="status-pill" class:active={isRunning}>
-      <span class="pulse-dot"></span>
-      {isRunning ? "ENCRYPTED" : "UNPROTECTED"}
+    <div
+      class="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-5 py-2 text-[0.7rem] font-bold tracking-widest transition-all duration-500 {isRunning
+        ? 'active-pill'
+        : ''}"
+    >
+      <span class="relative flex h-2 w-2">
+        <span
+          class="absolute inline-flex h-full w-full rounded-full opacity-75 {isRunning
+            ? 'animate-ping bg-photon-cyan'
+            : 'bg-white/20'}"
+        ></span>
+        <span
+          class="relative inline-flex h-2 w-2 rounded-full {isRunning
+            ? 'bg-photon-cyan'
+            : 'bg-white/20'}"
+        ></span>
+      </span>
+      <span class={isRunning ? "text-photon-cyan" : "text-white/40"}>
+        {isRunning ? "ENCRYPTED" : "UNPROTECTED"}
+      </span>
     </div>
   </nav>
 
-  <main class="content-wrapper">
-    <div class="core-engagement animate-pop">
+  <!-- Main Content -->
+  <main
+    class="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center px-6 pb-16"
+  >
+    <div class="mb-12">
       <ProxyCore {isRunning} {isLoading} onToggle={toggleProxy} />
     </div>
 
     {#if errorMsg}
-      <div class="error-toast glass animate-slide-up">
+      <div
+        class="relative mb-8 flex w-full max-w-lg items-center gap-5 rounded-2xl border-l-4 border-red-500 bg-red-500/10 p-4 backdrop-blur-md"
+      >
         <svg
+          class="h-6 w-6 text-red-500 shrink-0"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -99,284 +130,39 @@
           <line x1="12" y1="8" x2="12" y2="12"></line>
           <line x1="12" y1="16" x2="12.01" y2="16"></line>
         </svg>
-        <div class="error-content">
-          <span class="error-title">EXECUTION ERROR</span>
-          <span class="error-desc">{errorMsg}</span>
+        <div class="flex flex-col gap-0.5">
+          <span
+            class="text-[0.75rem] font-extrabold tracking-wider text-red-500"
+            >EXECUTION ERROR</span
+          >
+          <span class="text-sm text-white/90">{errorMsg}</span>
         </div>
-        <button class="close-error" onclick={() => (errorMsg = "")}
-          >&times;</button
+        <button
+          class="ml-auto text-xl text-white/40 hover:text-white"
+          onclick={() => (errorMsg = "")}>&times;</button
         >
       </div>
     {/if}
 
-    <div class="dashboard-grid animate-fade-delayed">
+    <div class="grid w-full grid-cols-1 gap-8 md:grid-cols-2">
       <UpstreamConfig bind:config {isRunning} />
       <EngineStatus {config} {isRunning} />
     </div>
   </main>
 
-  <footer class="bottom-bar">
-    <div class="footer-left">v1.2.4-STABLE</div>
-    <div class="footer-center">PHOTON QUANTUM INTERFACE</div>
-    <div class="footer-right">LATENCY: -- MS</div>
+  <!-- Footer -->
+  <footer
+    class="flex w-full items-center justify-between border-t border-white/10 px-8 py-6 text-[0.65rem] font-semibold tracking-widest text-white/20 lg:px-12 font-mono"
+  >
+    <div>v1.2.4-STABLE</div>
+    <div class="hidden sm:block">PHOTON QUANTUM INTERFACE</div>
+    <div>LATENCY: -- MS</div>
   </footer>
 </div>
 
 <style>
-  .app-layout {
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    z-index: 1;
-  }
-
-  /* Background Aesthetics */
-  .background-effects {
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    overflow: hidden;
-  }
-
-  .gradient-sphere {
-    position: absolute;
-    top: -20%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 1000px;
-    height: 1000px;
-    background: radial-gradient(circle, var(--purple-glow) 0%, transparent 70%);
-    filter: blur(100px);
-    opacity: 0.3;
-  }
-
-  .grid-overlay {
-    position: absolute;
-    inset: 0;
-    background-image: linear-gradient(
-        rgba(255, 255, 255, 0.02) 1px,
-        transparent 1px
-      ),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-    background-size: 40px 40px;
-    mask-image: linear-gradient(to bottom, black, transparent);
-  }
-
-  /* Nav */
-  .top-nav {
-    padding: 2.5rem 3rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .brand {
-    font-size: 1.25rem;
-    font-weight: 800;
-    letter-spacing: 0.3rem;
-    color: var(--text);
-  }
-
-  .brand .p {
-    color: var(--purple);
-  }
-  .brand .accent {
-    color: var(--cyan);
-    text-shadow: 0 0 15px var(--cyan-glow);
-  }
-
-  .status-pill {
-    padding: 0.6rem 1.2rem;
-    border-radius: 40px;
-    font-size: 0.7rem;
-    font-weight: 800;
-    letter-spacing: 0.15rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    color: var(--text-dim);
-    transition: all 0.5s;
-  }
-
-  .status-pill.active {
-    background: rgba(0, 242, 255, 0.08);
-    border-color: var(--cyan);
-    color: var(--cyan);
-    box-shadow: 0 0 20px var(--cyan-glow);
-  }
-
-  .pulse-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--text-vdim);
-  }
-
-  .active .pulse-dot {
-    background: var(--cyan);
-    animation: pulse-ring 2s infinite;
-  }
-
-  @keyframes pulse-ring {
-    0% {
-      transform: scale(0.8);
-      opacity: 0.5;
-    }
-    50% {
-      transform: scale(1.2);
-      opacity: 1;
-      box-shadow: 0 0 10px var(--cyan);
-    }
-    100% {
-      transform: scale(0.8);
-      opacity: 0.5;
-    }
-  }
-
-  /* Main Content */
-  .content-wrapper {
-    flex: 1;
-    max-width: 1000px;
-    margin: 0 auto;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding-bottom: 4rem;
-    overflow-y: auto;
-  }
-
-  .core-engagement {
-    margin-bottom: 3rem;
-  }
-
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    width: 100%;
-  }
-
-  /* Error Toast */
-  .error-toast {
-    max-width: 500px;
-    width: 100%;
-    padding: 1rem 1.5rem;
-    border-radius: 16px;
-    border-left: 4px solid var(--error);
-    margin-bottom: 2rem;
-    display: flex;
-    align-items: center;
-    gap: 1.25rem;
-    position: relative;
-    background: rgba(255, 77, 77, 0.05);
-  }
-
-  .error-toast svg {
-    width: 24px;
-    color: var(--error);
-    flex-shrink: 0;
-  }
-
-  .error-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-
-  .error-title {
-    font-size: 0.75rem;
-    font-weight: 800;
-    color: var(--error);
-    letter-spacing: 0.1rem;
-  }
-
-  .error-desc {
-    font-size: 0.85rem;
-    color: var(--text);
-    opacity: 0.9;
-  }
-
-  .close-error {
-    background: none;
-    border: none;
-    color: var(--text-vdim);
-    font-size: 1.5rem;
-    cursor: pointer;
-    margin-left: auto;
-  }
-
-  /* Footer */
-  .bottom-bar {
-    padding: 1.5rem 3rem;
-    display: flex;
-    justify-content: space-between;
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: var(--text-vdim);
-    letter-spacing: 0.1rem;
-    border-top: 1px solid var(--border);
-  }
-
-  /* Animations */
-  .animate-fade {
-    animation: fadeIn 0.8s ease-out;
-  }
-  .animate-fade-delayed {
-    animation: fadeIn 1s ease-out both;
-    animation-delay: 0.3s;
-  }
-  .animate-pop {
-    animation: popIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  .animate-slide-up {
-    animation: slideUp 0.4s ease-out;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-  @keyframes popIn {
-    from {
-      transform: scale(0.9);
-      opacity: 0;
-    }
-    to {
-      transform: scale(1);
-      opacity: 1;
-    }
-  }
-  @keyframes slideUp {
-    from {
-      transform: translateY(20px);
-      opacity: 0;
-    }
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-
-  /* Responsive */
-  @media (max-width: 800px) {
-    .dashboard-grid {
-      grid-template-columns: 1fr;
-    }
-    .content-wrapper {
-      padding: 0 1.5rem;
-    }
-    .top-nav {
-      padding: 2rem 1.5rem;
-    }
+  @reference "../app.css";
+  .active-pill {
+    @apply border-photon-cyan bg-photon-cyan/10 text-photon-cyan shadow-[0_0_20px_rgba(0,242,255,0.2)];
   }
 </style>
