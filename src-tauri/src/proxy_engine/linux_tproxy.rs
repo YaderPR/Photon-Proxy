@@ -204,8 +204,9 @@ impl ProxyAdapter for LinuxTproxyAdapter {
         if let Some(listener) = self.tcp_listener.take() {
             let upstream_cfg = self.upstream.clone();
             let handle = self.app_handle.clone();
+            let port = self.local_port;
             tokio::spawn(async move {
-                Self::tcp_accept_loop(listener, upstream_cfg, handle).await;
+                Self::tcp_accept_loop(listener, port, upstream_cfg, handle).await;
             });
         }
 
@@ -259,6 +260,7 @@ impl LinuxTproxyAdapter {
 
     async fn tcp_accept_loop(
         listener: TcpListener,
+        local_port: u16,
         upstream: UpstreamProtocol,
         handle: Option<tauri::AppHandle>,
     ) {
@@ -278,10 +280,14 @@ impl LinuxTproxyAdapter {
                     };
 
                     // Handle Docker bridge connections routed via REDIRECT (SO_ORIGINAL_DST)
-                    if let Ok(orig) = get_original_dst(client_stream.as_raw_fd()) {
-                        if orig.port() != target_addr.port() || orig.ip() != target_addr.ip() {
-                            log::debug!("TCP REDIRECT connection detected. Rewriting target {} to SO_ORIGINAL_DST {}", target_addr, orig);
-                            target_addr = orig;
+                    if target_addr.port() == local_port
+                        && target_addr.ip() == std::net::Ipv4Addr::new(127, 0, 0, 1)
+                    {
+                        if let Ok(orig) = get_original_dst(client_stream.as_raw_fd()) {
+                            if orig.port() != target_addr.port() || orig.ip() != target_addr.ip() {
+                                log::debug!("TCP REDIRECT connection detected. Rewriting target {} to SO_ORIGINAL_DST {}", target_addr, orig);
+                                target_addr = orig;
+                            }
                         }
                     }
 
