@@ -2,6 +2,7 @@ pub mod linux_tproxy;
 pub mod linux_tun_dummy;
 pub mod system_rules;
 pub mod zero_copy;
+pub mod upstream_relay;
 
 use anyhow::Result;
 
