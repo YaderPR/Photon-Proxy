@@ -1,10 +1,14 @@
 use anyhow::Result;
 use crate::proxy_engine::ProxyAdapter;
 use log::info;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::os::unix::io::AsRawFd;
 use socket2::{Socket, Domain, Type, Protocol};
-use tokio::net::{TcpListener, UdpSocket, TcpSocket, TcpStream};
+use tokio::net::{TcpListener, UdpSocket, TcpSocket};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use std::time::{Duration, Instant};
 use crate::proxy_engine::upstream_relay::{UpstreamProtocol, UpstreamClient};
 use crate::proxy_engine::upstream_relay::socks5::Socks5Client;
 use crate::proxy_engine::upstream_relay::http_proxy::HttpProxyClient;
@@ -17,7 +21,7 @@ pub struct LinuxTproxyAdapter {
     local_port: u16,
     upstream: UpstreamProtocol,
     tcp_listener: Option<TcpListener>,
-    udp_socket: Option<UdpSocket>,
+    udp_socket: Option<Arc<UdpSocket>>,
 }
 
 impl LinuxTproxyAdapter {
@@ -50,12 +54,29 @@ impl LinuxTproxyAdapter {
         
         socket.set_reuse_address(true)?;
         set_transparent(socket.as_raw_fd(), addr.is_ipv4())?;
+        set_recv_orig_dst(socket.as_raw_fd(), addr.is_ipv4())?;
 
         socket.bind(&addr.into())?;
         socket.set_nonblocking(true)?;
 
         Ok(UdpSocket::from_std(socket.into())?)
     }
+}
+
+/// Sets the IP_RECVORIGDSTADDR socket option to get the real target of a TPROXY UDP packet
+fn set_recv_orig_dst(fd: std::os::unix::io::RawFd, is_ipv4: bool) -> Result<()> {
+    let optval: libc::c_int = 1;
+    let ret = unsafe {
+        if is_ipv4 {
+            libc::setsockopt(fd, libc::SOL_IP, libc::IP_RECVORIGDSTADDR, &optval as *const _ as *const libc::c_void, std::mem::size_of_val(&optval) as libc::socklen_t)
+        } else {
+            libc::setsockopt(fd, libc::SOL_IPV6, libc::IPV6_RECVORIGDSTADDR, &optval as *const _ as *const libc::c_void, std::mem::size_of_val(&optval) as libc::socklen_t)
+        }
+    };
+    if ret < 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(())
 }
 
 /// Sets the IP_TRANSPARENT socket option
@@ -115,7 +136,7 @@ impl ProxyAdapter for LinuxTproxyAdapter {
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), self.local_port);
         
         self.tcp_listener = Some(Self::create_transparent_tcp_listener(addr)?);
-        self.udp_socket = Some(Self::create_transparent_udp_socket(addr)?);
+        self.udp_socket = Some(Arc::new(Self::create_transparent_udp_socket(addr)?));
         
         info!("TPROXY listeners successfully bound to {}", addr);
         
@@ -126,6 +147,16 @@ impl ProxyAdapter for LinuxTproxyAdapter {
             let upstream_cfg = self.upstream.clone();
             tokio::spawn(async move {
                 Self::tcp_accept_loop(listener, upstream_cfg).await;
+            });
+        }
+
+        /* Start UDP recv loop in background */
+        if let Some(socket) = self.udp_socket.take() {
+            let upstream_cfg = self.upstream.clone();
+            tokio::spawn(async move {
+                if let Err(e) = Self::udp_recv_loop(socket, upstream_cfg).await {
+                    log::error!("UDP receive loop error: {}", e);
+                }
             });
         }
 
@@ -173,6 +204,99 @@ impl LinuxTproxyAdapter {
         }
     }
 
+    async fn udp_recv_loop(socket: Arc<UdpSocket>, upstream: UpstreamProtocol) -> Result<()> {
+        info!("TPROXY UDP receive loop started");
+        
+        let socket_fd = socket.as_raw_fd();
+        let sessions: Arc<RwLock<HashMap<SocketAddr, Arc<UdpSession>>>> = Arc::new(RwLock::new(HashMap::new()));
+        let mut buf = [0u8; 65535];
+
+        loop {
+            socket.readable().await?;
+            
+            // Scope for non-Send types (libc structs)
+            let result = {
+                let mut msg_name: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+                let mut iov = libc::iovec {
+                    iov_base: buf.as_mut_ptr() as *mut libc::c_void,
+                    iov_len: buf.len(),
+                };
+                let mut control_buf = [0u8; 128];
+                let mut msg = libc::msghdr {
+                    msg_name: &mut msg_name as *mut _ as *mut libc::c_void,
+                    msg_namelen: std::mem::size_of_val(&msg_name) as u32,
+                    msg_iov: &mut iov,
+                    msg_iovlen: 1,
+                    msg_control: control_buf.as_mut_ptr() as *mut libc::c_void,
+                    msg_controllen: control_buf.len() as usize,
+                    msg_flags: 0,
+                };
+
+                let n = unsafe { libc::recvmsg(socket_fd, &mut msg, 0) };
+                if n < 0 {
+                    let err = std::io::Error::last_os_error();
+                    if err.kind() == std::io::ErrorKind::WouldBlock { 
+                        None
+                    } else {
+                        log::error!("recvmsg failed: {}", err);
+                        None
+                    }
+                } else {
+                    let n = n as usize;
+                    let client_addr = unsafe { sockaddr_to_socketaddr(&msg_name) };
+                    let dst_addr = get_orig_dst_from_msg(&msg);
+                    
+                    match (client_addr, dst_addr) {
+                        (Some(c), Some(d)) => Some((n, c, d)),
+                        _ => None,
+                    }
+                }
+            };
+
+            if let Some((n, client_addr, dst_addr)) = result {
+                // Check if it's a DNS query (Port 53)
+                if dst_addr.port() == 53 {
+                    log::debug!("Intercepted DNS query from {} to {}", client_addr, dst_addr);
+                    
+                    let upstream_cfg = upstream.clone();
+                    let socket_captured = socket.clone();
+                    let query = buf[..n].to_vec();
+
+                    tokio::spawn(async move {
+                        match Self::resolve_dns_via_proxy(&query, &upstream_cfg).await {
+                            Ok(resp) => {
+                                if let Err(e) = send_udp_transparent(&socket_captured, &resp, &client_addr, &dst_addr) {
+                                    log::error!("Failed to send DNS response back to {}: {}", client_addr, e);
+                                }
+                            }
+                            Err(e) => log::error!("DNS resolving error via proxy: {}", e),
+                        }
+                    });
+                    continue; // DNS handled separately
+                }
+
+                let mut session_map = sessions.write().await;
+                let session = if let Some(s) = session_map.get(&client_addr) {
+                    s.clone()
+                } else {
+                    let s = Arc::new(UdpSession::new(client_addr, dst_addr, upstream.clone(), socket.clone()).await?);
+                    session_map.insert(client_addr, s.clone());
+                    
+                    let sessions_weak = Arc::downgrade(&sessions);
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_secs(60)).await;
+                        if let Some(s_arc) = sessions_weak.upgrade() {
+                            s_arc.write().await.remove(&client_addr);
+                        }
+                    });
+                    s
+                };
+                
+                session.send_to_remote(&buf[..n], dst_addr).await?;
+            }
+        }
+    }
+
     async fn handle_tcp_connection(
         client_stream: &mut tokio::net::TcpStream, 
         target_addr: &SocketAddr, 
@@ -204,4 +328,164 @@ impl LinuxTproxyAdapter {
         log::debug!("Connection terminating for {}. TX: {} bytes, RX: {} bytes", target_addr, tx, rx);
         Ok(())
     }
+
+    async fn resolve_dns_via_proxy(query: &[u8], upstream: &UpstreamProtocol) -> Result<Vec<u8>> {
+        let dns_addr: SocketAddr = "1.1.1.1:53".parse().unwrap();
+        
+        // 1. Connect to Upstream Proxy but targeting 1.1.1.1:53 TCP
+        let mut stream = match upstream {
+            UpstreamProtocol::Direct => {
+                let socket = create_marked_tcp_socket(&dns_addr)?;
+                socket.connect(dns_addr).await?
+            }
+            UpstreamProtocol::Socks5 { server, username, password } => {
+                Socks5Client.connect(&dns_addr, server, username.as_deref(), password.as_deref()).await?
+            }
+            UpstreamProtocol::HttpProxy { server, username, password } => {
+                HttpProxyClient.connect(&dns_addr, server, username.as_deref(), password.as_deref()).await?
+            }
+        };
+
+        // 2. DNS over TCP: Send [Length: u16, Query: ...]
+        let mut tcp_query = Vec::with_capacity(query.len() + 2);
+        tcp_query.extend_from_slice(&(query.len() as u16).to_be_bytes());
+        tcp_query.extend_from_slice(query);
+        
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        stream.write_all(&tcp_query).await?;
+
+        // 3. Read response [Length: u16, Response: ...]
+        let mut len_buf = [0u8; 2];
+        stream.read_exact(&mut len_buf).await?;
+        let resp_len = u16::from_be_bytes(len_buf) as usize;
+        
+        let mut resp = vec![0u8; resp_len];
+        stream.read_exact(&mut resp).await?;
+        
+        Ok(resp)
+    }
+}
+
+struct UdpSession {
+    client_addr: SocketAddr,
+    upstream_socket: Arc<UdpSocket>,
+    downstream_socket: Arc<UdpSocket>, // The TPROXY socket to send back to client
+    #[allow(dead_code)]
+    last_activity: Instant,
+}
+
+impl UdpSession {
+    async fn new(client_addr: SocketAddr, _dst_addr: SocketAddr, _upstream: UpstreamProtocol, downstream: Arc<UdpSocket>) -> Result<Self> {
+        let socket = Arc::new(create_marked_udp_socket(&_dst_addr)?);
+        
+        let session = Self {
+            client_addr,
+            upstream_socket: socket,
+            downstream_socket: downstream,
+            last_activity: Instant::now(),
+        };
+
+        // Start listening for responses from remote
+        let client_addr_captured = client_addr;
+        let upstream_socket_clone = session.upstream_socket.clone();
+        let downstream_socket_clone = session.downstream_socket.clone();
+
+        tokio::spawn(async move {
+            let mut buf = [0u8; 65535];
+            loop {
+                match upstream_socket_clone.recv_from(&mut buf).await {
+                    Ok((n, remote_src)) => {
+                        if let Err(e) = send_udp_transparent(&downstream_socket_clone, &buf[..n], &client_addr_captured, &remote_src) {
+                            log::error!("Failed to relay UDP response to client {}: {}", client_addr_captured, e);
+                        }
+                    }
+                    Err(e) => {
+                        log::debug!("UDP Session for {} closed: {}", client_addr_captured, e);
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(session)
+    }
+
+    async fn send_to_remote(&self, data: &[u8], dst_addr: SocketAddr) -> Result<()> {
+        self.upstream_socket.send_to(data, &dst_addr).await?;
+        Ok(())
+    }
+}
+
+/// Helper to send a UDP packet back to the client while spoofing the source address
+fn send_udp_transparent(socket: &UdpSocket, data: &[u8], client_addr: &SocketAddr, _spoof_src: &SocketAddr) -> Result<()> {
+    let fd = socket.as_raw_fd();
+    let mut msg_name: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    let msg_namelen = match client_addr {
+        SocketAddr::V4(addr) => {
+            let sin: *mut libc::sockaddr_in = &mut msg_name as *mut _ as *mut _;
+            unsafe {
+                (*sin).sin_family = libc::AF_INET as libc::sa_family_t;
+                (*sin).sin_port = addr.port().to_be();
+                let ip_bits: u32 = u32::from_be_bytes(addr.ip().octets());
+                (*sin).sin_addr.s_addr = ip_bits;
+            }
+            std::mem::size_of::<libc::sockaddr_in>()
+        }
+        SocketAddr::V6(_addr) => return Err(anyhow::anyhow!("IPv6 UDP spoofing not yet implemented")),
+    };
+
+    let mut iov = libc::iovec {
+        iov_base: data.as_ptr() as *mut libc::c_void,
+        iov_len: data.len(),
+    };
+    
+    let msg = libc::msghdr {
+        msg_name: &mut msg_name as *mut _ as *mut libc::c_void,
+        msg_namelen: msg_namelen as u32,
+        msg_iov: &mut iov,
+        msg_iovlen: 1,
+        msg_control: std::ptr::null_mut(),
+        msg_controllen: 0,
+        msg_flags: 0,
+    };
+    
+    unsafe {
+        let n = libc::sendmsg(fd, &msg, 0);
+        if n < 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+    }
+
+    Ok(())
+}
+
+unsafe fn sockaddr_to_socketaddr(storage: &libc::sockaddr_storage) -> Option<SocketAddr> {
+    match storage.ss_family as libc::c_int {
+        libc::AF_INET => {
+            let addr: &libc::sockaddr_in = &*(storage as *const _ as *const libc::sockaddr_in);
+            let ip = Ipv4Addr::from(u32::from_be(addr.sin_addr.s_addr));
+            Some(SocketAddr::V4(SocketAddrV4::new(ip, u16::from_be(addr.sin_port))))
+        }
+        libc::AF_INET6 => {
+            let addr: &libc::sockaddr_in6 = &*(storage as *const _ as *const libc::sockaddr_in6);
+            let ip = std::net::Ipv6Addr::from(addr.sin6_addr.s6_addr);
+            Some(SocketAddr::V6(SocketAddrV6::new(ip, u16::from_be(addr.sin6_port), addr.sin6_flowinfo, addr.sin6_scope_id)))
+        }
+        _ => None,
+    }
+}
+
+fn get_orig_dst_from_msg(msg: &libc::msghdr) -> Option<SocketAddr> {
+    let mut cmsg = unsafe { libc::CMSG_FIRSTHDR(msg) };
+    while !cmsg.is_null() {
+        let cm = unsafe { &*cmsg };
+        if cm.cmsg_level == libc::SOL_IP && cm.cmsg_type == libc::IP_RECVORIGDSTADDR {
+            let addr_ptr = unsafe { libc::CMSG_DATA(cmsg) } as *const libc::sockaddr_in;
+            let addr = unsafe { &*addr_ptr };
+            let ip = Ipv4Addr::from(u32::from_be(addr.sin_addr.s_addr));
+            return Some(SocketAddr::V4(SocketAddrV4::new(ip, u16::from_be(addr.sin_port))));
+        }
+        cmsg = unsafe { libc::CMSG_NXTHDR(msg, cmsg) };
+    }
+    None
 }
