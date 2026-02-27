@@ -3,13 +3,23 @@ use std::os::unix::io::AsRawFd;
 use tokio::io::Interest;
 use tokio::net::TcpStream;
 
-/// Perfoms a zero-copy relay between two TCP streams in both directions concurrently.
+/// Performs a zero-copy relay between two TCP streams in both directions concurrently.
+/// Uses `tokio::join!` instead of `try_join!` to support TCP half-close:
+/// when one direction hits EOF or error, the other continues independently.
 pub async fn bidirectional_splice(
     client: &mut TcpStream,
     server: &mut TcpStream,
 ) -> Result<(u64, u64)> {
-    let (tx_bytes, rx_bytes) =
-        tokio::try_join!(splice_copy(client, server), splice_copy(server, client))?;
+    let (tx_res, rx_res) = tokio::join!(splice_copy(client, server), splice_copy(server, client));
+
+    let tx_bytes = tx_res.unwrap_or(0);
+    let rx_bytes = rx_res.unwrap_or(0);
+
+    // Shut down both directions cleanly after relay completes
+    use tokio::io::AsyncWriteExt;
+    let _ = server.shutdown().await;
+    let _ = client.shutdown().await;
+
     Ok((tx_bytes, rx_bytes))
 }
 
@@ -34,6 +44,9 @@ async fn splice_copy(read_sock: &TcpStream, write_sock: &TcpStream) -> Result<u6
         }
     }
     let _guard = PipeGuard(pipe_read, pipe_write);
+
+    // Increase pipe buffer to 1MB for throughput on fast connections
+    unsafe { libc::fcntl(pipe_write, libc::F_SETPIPE_SZ, 1048576) };
 
     let mut total_bytes = 0u64;
 

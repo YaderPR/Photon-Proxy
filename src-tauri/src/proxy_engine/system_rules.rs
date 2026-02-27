@@ -7,6 +7,9 @@ const TPROXY_MARK: u32 = 1;
 
 /// Setup iptables rules and routing policies to route traffic to the transparent proxy
 pub async fn setup_tproxy_rules(local_port: u16, fwmark: u32) -> Result<()> {
+    // Pre-cleanup: remove stale rules from previous crash/restart
+    cleanup_tproxy_rules().await.ok();
+
     info!(
         "Setting up TPROXY rules for port {} skipping egress fwmark {:#x}",
         local_port, fwmark
@@ -322,6 +325,8 @@ async fn ignore_private_ips(table: &str, chain: &str) -> Result<()> {
         "192.168.0.0/16",
         "10.0.0.0/8",
         "172.16.0.0/12",
+        "169.254.0.0/16", // Link-local (Docker metadata, APIPA)
+        "224.0.0.0/4",    // Multicast
     ];
     for subnet in subnets {
         run_cmd(

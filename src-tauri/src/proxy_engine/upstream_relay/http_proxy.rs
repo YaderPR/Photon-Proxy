@@ -23,7 +23,8 @@ impl UpstreamClient for HttpProxyClient {
         let mut request = format!(
             "CONNECT {}:{} HTTP/1.1\r\n\
             Host: {}:{}\r\n\
-            User-Agent: PhotonProxy/0.1\r\n",
+            User-Agent: PhotonProxy/0.1\r\n\
+            Proxy-Connection: keep-alive\r\n",
             target.ip(),
             target.port(),
             target.ip(),
