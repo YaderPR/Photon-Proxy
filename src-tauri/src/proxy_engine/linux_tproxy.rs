@@ -456,7 +456,7 @@ impl LinuxTproxyAdapter {
         client_stream: &mut tokio::net::TcpStream,
         target_addr: &SocketAddr,
         upstream: &UpstreamProtocol,
-        handle: &Option<tauri::AppHandle>,
+        _handle: &Option<tauri::AppHandle>,
     ) -> Result<()> {
         // 1. Establish connection to the proxy/relay
         let mut server_stream = match upstream {
@@ -662,7 +662,7 @@ fn send_udp_transparent(
     socket: &UdpSocket,
     data: &[u8],
     client_addr: &SocketAddr,
-    _spoof_src: &SocketAddr,
+    spoof_src: &SocketAddr,
 ) -> Result<()> {
     let fd = socket.as_raw_fd();
     let mut msg_name: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
@@ -672,7 +672,7 @@ fn send_udp_transparent(
             unsafe {
                 (*sin).sin_family = libc::AF_INET as libc::sa_family_t;
                 (*sin).sin_port = addr.port().to_be();
-                let ip_bits: u32 = u32::from_be_bytes(addr.ip().octets());
+                let ip_bits: u32 = u32::from(*addr.ip()).to_be();
                 (*sin).sin_addr.s_addr = ip_bits;
             }
             std::mem::size_of::<libc::sockaddr_in>()
@@ -687,13 +687,38 @@ fn send_udp_transparent(
         iov_len: data.len(),
     };
 
+    let mut control_buf = [0u8; 64];
+    let mut controllen = 0;
+
+    if let SocketAddr::V4(addr) = spoof_src {
+        let cmsg_space =
+            unsafe { libc::CMSG_SPACE(std::mem::size_of::<libc::in_pktinfo>() as u32) };
+        controllen = cmsg_space as usize;
+
+        unsafe {
+            let cmsg = control_buf.as_mut_ptr() as *mut libc::cmsghdr;
+            (*cmsg).cmsg_level = libc::SOL_IP;
+            (*cmsg).cmsg_type = libc::IP_PKTINFO;
+            (*cmsg).cmsg_len = libc::CMSG_LEN(std::mem::size_of::<libc::in_pktinfo>() as u32) as _;
+
+            let pkt_info_ptr = libc::CMSG_DATA(cmsg) as *mut libc::in_pktinfo;
+            let mut pkt_info: libc::in_pktinfo = std::mem::zeroed();
+            pkt_info.ipi_spec_dst.s_addr = u32::from(*addr.ip()).to_be();
+            std::ptr::write(pkt_info_ptr, pkt_info);
+        }
+    }
+
     let msg = libc::msghdr {
         msg_name: &mut msg_name as *mut _ as *mut libc::c_void,
         msg_namelen: msg_namelen as u32,
         msg_iov: &mut iov,
         msg_iovlen: 1,
-        msg_control: std::ptr::null_mut(),
-        msg_controllen: 0,
+        msg_control: if controllen > 0 {
+            control_buf.as_mut_ptr() as *mut libc::c_void
+        } else {
+            std::ptr::null_mut()
+        },
+        msg_controllen: controllen as _,
         msg_flags: 0,
     };
 
