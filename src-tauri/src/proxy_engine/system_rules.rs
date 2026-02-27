@@ -15,6 +15,20 @@ pub async fn setup_tproxy_rules(local_port: u16, fwmark: u32) -> Result<()> {
         local_port, fwmark
     );
 
+    // 0. Sysctl configuration required for TPROXY on locally-generated traffic
+    // When OUTPUT-marked packets are re-routed to loopback, rp_filter MUST be disabled
+    // or set to loose mode (2+). Otherwise the kernel drops them (source doesn't match lo).
+    run_cmd("sysctl", &["-w", "net.ipv4.conf.lo.rp_filter=0"])
+        .await
+        .ok();
+    run_cmd("sysctl", &["-w", "net.ipv4.conf.all.rp_filter=0"])
+        .await
+        .ok();
+    // Also required for transparent sockets to bind non-local IPs
+    run_cmd("sysctl", &["-w", "net.ipv4.ip_nonlocal_bind=1"])
+        .await
+        .ok();
+
     // 1. IP Route configuration (Policy Routing)
     // Send packets marked with TPROXY_MARK to loopback interface
     run_cmd(
@@ -241,6 +255,7 @@ pub async fn setup_tproxy_rules(local_port: u16, fwmark: u32) -> Result<()> {
     )
     .await?;
 
+    info!("TPROXY rules successfully configured");
     Ok(())
 }
 
@@ -287,19 +302,25 @@ pub async fn cleanup_tproxy_rules() -> Result<()> {
         .await
         .ok();
 
-    run_cmd(
-        "ip",
-        &[
-            "rule",
-            "del",
-            "fwmark",
-            &TPROXY_MARK.to_string(),
-            "table",
-            &ROUTING_TABLE.to_string(),
-        ],
-    )
-    .await
-    .ok();
+    // Delete ALL duplicate ip rules (not just one) to prevent rule accumulation across restarts
+    for _ in 0..10 {
+        let result = run_cmd(
+            "ip",
+            &[
+                "rule",
+                "del",
+                "fwmark",
+                &TPROXY_MARK.to_string(),
+                "table",
+                &ROUTING_TABLE.to_string(),
+            ],
+        )
+        .await;
+        if result.is_err() {
+            break; // No more rules to delete
+        }
+    }
+
     run_cmd(
         "ip",
         &[
