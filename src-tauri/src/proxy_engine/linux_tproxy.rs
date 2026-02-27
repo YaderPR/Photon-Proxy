@@ -266,7 +266,7 @@ impl LinuxTproxyAdapter {
         loop {
             match listener.accept().await {
                 Ok((mut client_stream, src_addr)) => {
-                    let target_addr = match client_stream.local_addr() {
+                    let mut target_addr = match client_stream.local_addr() {
                         Ok(addr) => addr,
                         Err(e) => {
                             log::error!(
@@ -276,6 +276,14 @@ impl LinuxTproxyAdapter {
                             continue;
                         }
                     };
+
+                    // Handle Docker bridge connections routed via REDIRECT (SO_ORIGINAL_DST)
+                    if let Ok(orig) = get_original_dst(client_stream.as_raw_fd()) {
+                        if orig.port() != target_addr.port() || orig.ip() != target_addr.ip() {
+                            log::debug!("TCP REDIRECT connection detected. Rewriting target {} to SO_ORIGINAL_DST {}", target_addr, orig);
+                            target_addr = orig;
+                        }
+                    }
 
                     Self::emit_log(
                         &handle,
@@ -772,4 +780,29 @@ fn get_orig_dst_from_msg(msg: &libc::msghdr) -> Option<SocketAddr> {
         cmsg = unsafe { libc::CMSG_NXTHDR(msg, cmsg) };
     }
     None
+}
+
+fn get_original_dst(fd: std::os::unix::io::RawFd) -> std::io::Result<SocketAddr> {
+    let mut addr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
+    let mut len = std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t;
+
+    let ret = unsafe {
+        libc::getsockopt(
+            fd,
+            libc::SOL_IP,
+            libc::SO_ORIGINAL_DST,
+            &mut addr as *mut _ as *mut libc::c_void,
+            &mut len,
+        )
+    };
+
+    if ret < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+
+    let ip = Ipv4Addr::from(u32::from_be(addr.sin_addr.s_addr));
+    Ok(SocketAddr::V4(SocketAddrV4::new(
+        ip,
+        u16::from_be(addr.sin_port),
+    )))
 }
